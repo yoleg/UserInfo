@@ -116,6 +116,34 @@ class UserInfo {
 		return true;
 	}
     
+/*
+ * Returns a field value
+ * Possibly use to replace all instances of $this->data[$field] with $this->get($field)
+ * @param $field string the field to get
+ * @return string the value
+ */
+	public function get($field) {
+        if (isset($this->data[$field])) {
+            $output = $this->data[$field];
+        } else {
+            $output = '';
+        }
+        return $output;
+	}
+    
+/*
+ * Sets a field value
+ * @param $field string the field name to set
+ * @param $value string the value to set
+ * @return bool success
+ */
+	public function set($field,$value) {
+        if (is_string($field) && !empty($field)) {
+            $this->data[$field] = $value;
+            $success = true;
+        } else $success = false;
+        return $success;
+	}
     
 /* *************************** */
 /*   Meant for extension       */
@@ -132,8 +160,7 @@ class UserInfo {
 		// add calculations
 		// the order of the calculations is important!
         // Here is an example calculation, which adds the "self" placeholder if user is logged in.
-		$this->data[$prefix.'self'] = (int) $this->calculateSelf();
-		
+		$success = $this->set($prefix.'self', (int) $this->calculateSelf());
 		return true;
 	}
 
@@ -156,7 +183,7 @@ class UserInfo {
 /* *************************** */
 
 /* 
- * gets calculated data from $this::user and adds it to $this::data.
+ * gets standard user data from $this::user and adds it to $this::data.
  * @return bool success
  */
 	public function getUserData(array $fields = array('id','username','active','class_key')) {
