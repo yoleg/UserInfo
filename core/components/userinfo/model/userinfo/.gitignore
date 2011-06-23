@@ -1,7 +1,0 @@
-# ignore subfolders
-/*/
-/*/*
-
-# except userinfocustom
-!/example/
-!/example/*
