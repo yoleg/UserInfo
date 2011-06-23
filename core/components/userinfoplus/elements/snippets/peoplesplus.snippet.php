@@ -5,38 +5,38 @@
  * Copyright 2011 by Oleg Pryadko <oleg@websitezen.com>
  * Based on Peoples Copyright 2010 by Shaun McCormick <shaun@modx.com>
  *
- * UserInfo is free software; you can redistribute it and/or modify it under the
+ * UserInfoPlus is free software; you can redistribute it and/or modify it under the
  * terms of the GNU General Public License as published by the Free Software
  * Foundation; either version 2 of the License, or (at your option) any later
  * version.
  *
- * UserInfo is distributed in the hope that it will be useful, but WITHOUT ANY
+ * UserInfoPlus is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
  * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License along with
- * UserInfo; if not, write to the Free Software Foundation, Inc., 59 Temple
+ * UserInfoPlus; if not, write to the Free Software Foundation, Inc., 59 Temple
  * Place, Suite 330, Boston, MA 02111-1307 USA
  *
- * @package userinfo
+ * @package userinfoplus
  */
 /**
  * Expands on Peoples to add expanded, remote, and custom data types
  * Peoples: Displays a list of Users
  *
- * @package userinfo
+ * @package userinfoplus
  */
  
 /*
- * UserInfo: Allows you to load a custom class that overrides userinfo to add calculations or control order of processing
+ * UserInfoPlus: Allows you to load a custom class that overrides userinfoplus to add calculations or control order of processing
  */
-$classname_custom = $modx->getOption('class',$scriptProperties,$modx->getOption('userinfo.class',null,''));
-$classname_upper = $classname_custom ? $classname_custom : 'UserInfo';
-$classname_lower = $modx->getOption('class_lower',$scriptProperties,$modx->getOption('userinfo.class_lower',null,strtolower($classname_upper)));
-$classname_subfolder = $classname_custom ? str_replace('userinfo','',$classname_lower).'/' : '';
-$classname_path = $modx->getOption('class_path',$scriptProperties,$modx->getOption('userinfo.core_path',null,$modx->getOption('core_path').'components/userinfo/').'model/userinfo/'.$classname_subfolder);
-$userinfo = $modx->getService('userinfo',$classname_upper,$classname_path,$scriptProperties);
-if (!($userinfo instanceof UserInfo)) {
+$classname_custom = $modx->getOption('class',$scriptProperties,$modx->getOption('userinfoplus.class',null,''));
+$classname_upper = $classname_custom ? $classname_custom : 'UserInfoPlus';
+$classname_lower = $modx->getOption('class_lower',$scriptProperties,$modx->getOption('userinfoplus.class_lower',null,strtolower($classname_upper)));
+$classname_subfolder = $classname_custom ? str_replace('userinfoplus','',$classname_lower).'/' : '';
+$classname_path = $modx->getOption('class_path',$scriptProperties,$modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/'.$classname_subfolder);
+$userinfoplus = $modx->getService('userinfoplus',$classname_upper,$classname_path,$scriptProperties);
+if (!($userinfoplus instanceof UserInfoPlus)) {
     $modx->log(modX::LOG_LEVEL_ERROR,'Could not find class at: '.$classname_path);
     return 'Could not find class at: '.$classname_path;
 }
@@ -49,7 +49,10 @@ $tpl = $modx->getOption('tpl',$scriptProperties,'pplUser');
 $active = (boolean)$modx->getOption('active',$scriptProperties,true);
 $usergroups = $modx->getOption('usergroups',$scriptProperties,'');
 $limit = (int)$modx->getOption('limit',$_REQUEST,$modx->getOption('limit',$scriptProperties,10));
-$start = (int)$modx->getOption('start',$modx->getOption('offset',$_REQUEST,$modx->getOption('offset',$scriptProperties,0)));
+/* fix start / offset to work with getPage */
+$start = (int)$modx->getOption('start',$scriptProperties,0);
+$offset = (int) $modx->getOption('offset',$_REQUEST,$modx->getOption('offset',$scriptProperties,0));
+$offset += $start;
 $sortBy = $modx->getOption('sortBy',$scriptProperties,'username');
 $sortByAlias = $modx->getOption('sortByAlias',$scriptProperties,'User');
 $sortDir = $modx->getOption('sortDir',$scriptProperties,'ASC');
@@ -61,6 +64,7 @@ $placeholderPrefix = $modx->getOption('placeholderPrefix',$scriptProperties,'peo
 $profileAlias = $modx->getOption('profileAlias',$scriptProperties,'Profile');
 $userClass = $modx->getOption('userClass',$scriptProperties,'modUser');
 $userAlias = $modx->getOption('userAlias',$scriptProperties,'User');
+$debug = (boolean)$modx->getOption('debug',$scriptProperties,false);
 
 /* build query */
 $c = $modx->newQuery($userClass);
@@ -96,10 +100,12 @@ foreach ($users as $user) {
     if (empty($user->$profileAlias)) continue;
     
     /* PeoplesPlus: process data */
-    $userinfo->setUser($user);
-    $userinfo->process();
-    $userArray = $userinfo->toArray();
-
+    $userinfoplus->setUser($user);
+    $userinfoplus->process();
+    $userArray = $userinfoplus->toArray();
+    if ($debug) {
+        $userArray['debug'] = '<pre>'.print_r($userArray,1).'</pre>';
+    }
   
     $userArray['cls'] = array();
     $userArray['cls'][] = $cls;
@@ -127,7 +133,7 @@ foreach ($users as $user) {
 $placeholders = array(
     'total' => $count,
     'start' => $start,
-    'offset' => $start,
+    'offset' => $offset,
     'limit' => $limit,
 );
 $modx->setPlaceholders($placeholders,$placeholderPrefix);
