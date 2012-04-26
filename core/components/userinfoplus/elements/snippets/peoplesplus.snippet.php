@@ -35,6 +35,9 @@ $classname_upper = $classname_custom ? $classname_custom : 'UserInfoPlus';
 $classname_lower = $modx->getOption('class_lower',$scriptProperties,$modx->getOption('userinfoplus.class_lower',null,strtolower($classname_upper)));
 $classname_subfolder = $classname_custom ? str_replace('userinfoplus','',$classname_lower).'/' : '';
 $classname_path = $modx->getOption('class_path',$scriptProperties,$modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/'.$classname_subfolder);
+if ($classname_custom) {
+    require_once($modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/userinfoplus.class.php');
+}
 $userinfoplus = $modx->getService('userinfoplus',$classname_upper,$classname_path,$scriptProperties);
 if (!($userinfoplus instanceof UserInfoPlus)) {
     $modx->log(modX::LOG_LEVEL_ERROR,'Could not find class at: '.$classname_path);
@@ -86,7 +89,7 @@ if (!empty($usergroups)) {
 $count = $modx->getCount($userClass,$c);
 $c->sortby($sortByAlias.'.'.$sortBy,$sortDir);
 if (!empty($limit)) {
-    $c->limit($limit,$start);
+    $c->limit($limit,$offset);
 }
 $c->bindGraph('{"'.$profileAlias.'":{}}');
 $users = $modx->getCollectionGraph($userClass,'{"'.$profileAlias.'":{}}',$c);
