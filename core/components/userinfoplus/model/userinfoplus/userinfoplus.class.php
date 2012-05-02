@@ -6,13 +6,19 @@
  * Example usage in snippets:
  * // Include the file or use $modx->loadClass
  * $UserInfoPlus = new UserInfoPlus($modx,$scriptProperties);
- * $UserInfoPlus->setUser($user);
- * $UserInfoPlus->process();
+ * $UserInfoPlus->setUser($user); // user information is cached, so switch users as often as necessary
  * $userArray = $UserInfoPlus->toArray();
  * 
  * Ready for extension: this class is designed to be extended
  * Add camel case methods in the format 'calculate'.$camelCaseFieldName
  * For example, for the field 'sent_massages', create a method called calculateSentMessages that returns the proper value
+ *
+ * This class also handles setting data with $UserInfoPlus->setToUser('color','blue','extended');
+ * Add camel case methods in the format 'derive'.$camelCaseFieldName to set custom setters
+ * For example, if you want to separate the field 'full_name' into first and last values automatically, create a method
+ * called deriveFullName and make it automatically save the right values whenever saving the key 'full_name'
+ *
+ * Then, save the user with $UserInfoPlus->saveUser()
  *
  * Tip: the snippets that come with this package allow you to switch to a custom class
  * Example: class UserInfoCustom extends UserInfoPlus
@@ -62,6 +68,11 @@ class UserInfoPlus {
 		/* generate the default protected fields array - sets defaults as a security fallback */
         $this->config['protected_fields_array'] = isset($this->config['protected_fields']) ? explode(',',$this->config['protected_fields']) : array('sessionid','password','cachepwd');
         $this->config['calculated_fields'] = array('self');
+
+        $this->config['field_types'] = array(
+            'user' => array_keys($modx->getFields('modUser')),
+            'profile' => array_keys($modx->getFields('modUserProfile')),
+        );
     }
 
 /* *************************** */
@@ -90,14 +101,16 @@ class UserInfoPlus {
         }
         $old_data = $this->_getCache('setUser',$userid);
 		$this->user = $user;
-		$this->_profile = isset($old_data['profile']) && $old_data['profile'] instanceof modUserProfile ? $old_data['profile'] : $user->getOne('Profile');
+		$this->_profile = isset($old_data['profile']) &&
+                $old_data['profile'] instanceof modUserProfile ? $old_data['profile'] : $user->getOne('Profile');
 		$this->_data = isset($old_data['data']) ? $old_data['data'] : array();
 		$this->_cache = isset($old_data['cache']) ? $old_data['cache'] : array();
 		return true;
 	}
 
     /**
-     * Returns $this->data array - "Ends"
+     * Returns $this->data array after processing it
+     * @param string $prefix
      * @return array the final userdata array
      */
 	public function toArray($prefix = '') {
@@ -106,8 +119,8 @@ class UserInfoPlus {
             $output = $this->_data;
         } else {
             $output = array();
-            foreach($this->_data as $k => $v) {
-                $output[$prefix.$k] = $v;
+            foreach ($this->_data as $k => $v) {
+                $output[strval($prefix).strval($k)] = (string) $v;
             }
         }
         return $output;
@@ -130,21 +143,22 @@ class UserInfoPlus {
 		$this->_protectData($this->_data);
 		return true;
 	}
+
     /**
      * Returns a field value
      * @param $fieldname string the field to get
-     * @param $methods_to_try array An array of methods to try in order
      * @param $source string The source type (other than user or profile data). Default source types: 'extended', 'remote_data', and 'calculated'.
+     * @param null $folder
+     * @param $methods_to_try array An array of methods to try in order
      * @return string the value
      */
-	public function get($fieldname, $source=null, $methods_to_try= null) {
-        $calc_method = '';
+	public function get($fieldname, $source=null, $folder=null, $methods_to_try=null) {
+        if (is_null($source)) $source = $this->_getFieldType($fieldname);
         $prefix = is_string($source) && isset($this->config['prefixes'][$source]) ? $this->config['prefixes'][$source] : '';
         $fieldname = $prefix.$fieldname;
         if (isset($this->_data[$fieldname])) {
             $output = $this->_data[$fieldname];
         } else {
-
             $source_method = (is_string($source) && !empty($source) && $source != 'calculated') ? 'getAll'.ucfirst($source).'Data' : '';
             if (is_null($methods_to_try) &&  $source_method && method_exists($this,$source_method)) {
                 $methods_to_try = array($source_method);
@@ -177,7 +191,7 @@ class UserInfoPlus {
      */
 	public function set($field,$value,$prefix_type = null) {
         if (is_string($field) && !empty($field)) {
-            $this->_data[$field] = (string) $value;
+            $this->_data[$prefix_type.$field] = (string) $value;
         } else {
             $this->modx->log(modX::LOG_LEVEL_ERROR,"UserInfoPlus::set: Field must be a string.");
         }
@@ -188,11 +202,10 @@ class UserInfoPlus {
 /*   Meant for extension       */
 /* *************************** */
     /** Calculates custom data
-     * @param null $prefix
+     * @internal param null $prefix
      * @return bool success
      */
-	public function calculateData($prefix = null) {
-		$prefix = (string) is_null($prefix) ? $prefix : $this->config['prefixes']['calculated'];
+	public function calculateData() {
         $fields = $this->config['calculated_fields'];
         foreach($fields as $field) {
             $this->get($field,'calculated');
@@ -293,6 +306,7 @@ class UserInfoPlus {
      * If no parameter is passed, uses $this->config['protected_fields']
      * You HAVE to have protected_fields either in config or as a method parameter. To disable, just list a field that doesn't exist.
      * This is a security fall-back.
+     * @param $data
      * @param $fields array An optional array of field names to unset
      * @return bool Always true
      */
@@ -372,16 +386,17 @@ class UserInfoPlus {
     /**
      * Figures out the method to use for calculating a field value
      * @param $fieldname
+     * @param string $type
      * @return string
      */
-    protected function _getCalcMethodName($fieldname) {
-        $methodname = $this->_getCache('_getCalcMethodName',$fieldname);
+    protected function _getCalcMethodName($fieldname,$type = 'getter') {
+        $methodname = $this->_getCache('_getCalcMethodName',$fieldname.$type);
         if (!is_null($methodname)) return $methodname;
         $calcprefix = $this->config['prefixes']['calculated'];
         if ($calcprefix && strpos($fieldname,$calcprefix) === 0) {
             $fieldname = substr($fieldname,(strlen($calcprefix)-strlen($fieldname)));
         }
-        $methodname = 'calculate';
+        $methodname = ($type == 'setter') ? 'derive' : 'calculate';
         foreach (explode('_',$fieldname) as $namepart) {
             $methodname .= ucfirst($namepart);
         }
@@ -423,4 +438,84 @@ class UserInfoPlus {
         }
         return null;
     }
+
+
+    protected function _getFieldType($fieldname) {
+        if (in_array($fieldname,$this->config['field_types']['user'])) {
+            return 'user';
+        } elseif (in_array($fieldname,$this->config['field_types']['profile'])) {
+            return 'profile';
+        }
+        return null;
+    }
+    protected function _fieldInProfile($fieldname) {
+        return false;
+    }
+
+/******************************************/
+/*             SAVING INFO TO USER        */
+/******************************************/
+    /**
+     * @param string $fieldname The key to access by
+     * @param mixed|null $value The value to set, or null to unset.
+     * @param null $type
+     * @param string $folder An optional folder
+     * @throws Exception
+     * @return bool Success
+     */
+    public function setToUser($fieldname, $value = null, $type = null, $folder = null) {
+        if (is_null($type)) $type = $this->_getFieldType($fieldname);
+        try {
+            $setter = $this->_getCalcMethodName($fieldname,'setter');
+            if (method_exists($this,$setter)) {
+                $this->$setter($value);
+            } elseif ($type == 'user') {
+                $this->user->set($fieldname,$value);
+            } elseif ($type == 'profile') {
+                $this->_profile->set($fieldname,$value);
+            } elseif ($type == 'remote') {
+                $this->_setRemote($fieldname,$value,$folder);
+            } else {
+                $this->_setExtended($fieldname,$value,$folder);
+            }
+        } catch (Exception $e) {
+            throw new Exception('An error occured while saving the field '.$fieldname.': '.$e->getMessage());
+        }
+        return True;
+    }
+    /**
+     * @return bool Success
+     */
+    public function saveUser() {
+        return $this->user->save();
+    }
+    /**
+     * @param string $key The key to access by
+     * @param mixed|null $value The value to set, or null to unset.
+     * @param string $folder An optional folder
+     * @return void
+     * @throws Exception If user does not have an id.
+     */
+    private function _setExtended($key,$value = null,$folder = null) {
+        $profile = $this->_profile;
+        $extended = $profile->get('extended');
+        $extended = is_array($extended) ? $extended : array();
+        if (!is_null($value)) {
+            $extended[$key] = $value;
+        } elseif (isset($extended[$key])) {
+            unset($extended[$key]);
+        }
+        $profile->set('extended',$extended);
+    }
+    private function _setRemote($key,$value = null,$folder = null) {
+        $remote = $this->user->get('remote');
+        $remote = is_array($remote) ? $remote : array();
+        if (!is_null($value)) {
+            $remote[$key] = $value;
+        } elseif (isset($remote[$key])) {
+            unset($remote[$key]);
+        }
+        $this->user->set('remote',$remote);
+    }
+
 }

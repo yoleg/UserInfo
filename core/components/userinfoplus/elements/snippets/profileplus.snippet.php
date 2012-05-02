@@ -93,6 +93,7 @@ $classname_path = $modx->getOption('class_path',$scriptProperties,$modx->getOpti
 if ($classname_custom) {
     require_once($modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/userinfoplus.class.php');
 }
+/** @var $userinfoplus UserInfoPlus */
 $userinfoplus = $modx->getService('userinfoplus',$classname_upper,$classname_path,$scriptProperties);
 if (!($userinfoplus instanceof UserInfoPlus)) {
     $modx->log(modX::LOG_LEVEL_ERROR,'Could not find class at: '.$classname_path);
@@ -101,13 +102,14 @@ if (!($userinfoplus instanceof UserInfoPlus)) {
 
 /* UserInfoPlus: process data */
 $userinfoplus->setUser($user);
-$userinfoplus->process();
 $placeholders = $userinfoplus->toArray();
 
 if ($modx->getOption('debug',$scriptProperties,false)) {
     $placeholders['debug'] = print_r($placeholders,1);
 }
-unset($placeholders['password'],$placeholders['cachepwd']);
+foreach(array('password','cachepwd') as $k) {
+    if (isset($placeholders[$k])) unset($placeholders[$k]);
+}
 /* now set placeholders */
 $modx->toPlaceholders($placeholders,$prefix,'');
 return '';

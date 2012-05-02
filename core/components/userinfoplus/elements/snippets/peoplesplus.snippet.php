@@ -103,8 +103,8 @@ foreach ($users as $user) {
     if (empty($user->$profileAlias)) continue;
     
     /* PeoplesPlus: process data */
+    /** @var $userinfoplus UserInfoPlus */
     $userinfoplus->setUser($user);
-    $userinfoplus->process();
     $userArray = $userinfoplus->toArray();
     if ($debug) {
         $userArray['debug'] = '<pre>'.print_r($userArray,1).'</pre>';
