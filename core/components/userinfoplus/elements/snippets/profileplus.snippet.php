@@ -29,6 +29,10 @@
  * @uses login
  * @requires MODx Revolution Login package
  */
+/**
+ * @var MODx $modx
+ * @var array $scriptProperties
+ */
 $user = $modx->getOption('user',$scriptProperties,'');
 
 // Just in case you need the original lexicon

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * A class which collects a single-dimension array of user data
  * ready for use by MODx snippets to set as placeholders.
@@ -100,14 +100,24 @@ class UserInfoPlus {
      * Returns $this->data array - "Ends"
      * @return array the final userdata array
      */
-	public function toArray() {
-		return $this->_data;
+	public function toArray($prefix = '') {
+        $this->process();
+        if (empty($prefix)) {
+            $output = $this->_data;
+        } else {
+            $output = array();
+            foreach($this->_data as $k => $v) {
+                $output[$prefix.$k] = $v;
+            }
+        }
+        return $output;
 	}
 
     /**
      * The main controller function
      * Extend this class with your own site-specific class and write your own process() function to control the order of execution and add logic.
      * An alternative is to bypass this method and just call the various methods directly in your snippets
+     * @param array $methods
      * @return bool success
      */
 	public function process($methods = array('getAllUserData','getAllProfileData','getAllExtendedData','getAllRemoteData','calculateData')) {
@@ -117,7 +127,7 @@ class UserInfoPlus {
             $this->_callMethodOnce($method);
         }
 		// Unsets some protected fields - by default removes fields in $this->config['protected_fields']
-		$this->_protectData();
+		$this->_protectData($this->_data);
 		return true;
 	}
     /**
@@ -134,43 +144,44 @@ class UserInfoPlus {
         if (isset($this->_data[$fieldname])) {
             $output = $this->_data[$fieldname];
         } else {
+
             $source_method = (is_string($source) && !empty($source) && $source != 'calculated') ? 'getAll'.ucfirst($source).'Data' : '';
             if (is_null($methods_to_try) &&  $source_method && method_exists($this,$source_method)) {
                 $methods_to_try = array($source_method);
             } else {
-                $methods_to_try = is_array($methods_to_try) && !empty($methods_to_try) ? $methods_to_try : array('getAllUserData','getAllProfileData');
+                $methods_to_try = is_array($methods_to_try) && !empty($methods_to_try) ? $methods_to_try : array('getAllUserData','getAllProfileData','getAllExtendedData');
                 $calc_method = $this->_getCalcMethodName($fieldname);
                 $methods_to_try[] = $calc_method;
             }
             $output = $this->_findFieldValue($fieldname,$methods_to_try);   // will automatically set string values
             // if all else fails, throw a warning and return a blank string
             if (is_null($output)) {
-                $output = '';
-                $source = (string) $source;
+                $output = $this->getDefault($fieldname, $source);
                 $this->set($fieldname,$output);
-                $this->modx->log(modX::LOG_LEVEL_WARN,"UserInfoPlus: The field {$fieldname} (source {$source} and calc_method {$calc_method}) does not exist or is not accessible for user {$this->user->get('username')}. Setting empty string.");
             }
+            $this->set($fieldname,$output);
         }
         return $output;
 	}
+
+    public function getDefault($fieldname, $source=null) {
+        return '';
+    }
 
     /**
      * Sets a field value
      * @param $field string the field name to set
      * @param $value string the value to set
      * @param $prefix_type string The prefix to use
-     * @return bool success
+     * @return mixed The value set
      */
 	public function set($field,$value,$prefix_type = null) {
         if (is_string($field) && !empty($field)) {
-            $this->_data[$field] = $value;
-            $success = true;
+            $this->_data[$field] = (string) $value;
         } else {
-            $value = (string) $value;
-            $this->modx->log(modX::LOG_LEVEL_ERROR,"UserInfoPlus: Failed to set {$field} because {$value} is not a string.");
-            $success = false;
+            $this->modx->log(modX::LOG_LEVEL_ERROR,"UserInfoPlus::set: Field must be a string.");
         }
-        return $success;
+        return $value;
 	}
 
 /* *************************** */
@@ -184,7 +195,7 @@ class UserInfoPlus {
 		$prefix = (string) is_null($prefix) ? $prefix : $this->config['prefixes']['calculated'];
         $fields = $this->config['calculated_fields'];
         foreach($fields as $field) {
-            $this->get($field);
+            $this->get($field,'calculated');
         }
 		return true;
 	}
@@ -214,7 +225,8 @@ class UserInfoPlus {
 	public function getAllUserData(array $fields = array('id','username','active','class_key')) {
 		// $user_array = $this->user->toArray();
 		$user_array = $this->user->get($fields);
-		return $this->_mergeWithData($user_array);
+		$this->_mergeWithData($user_array);
+        return $user_array;
 	}
     /**
      * gets calculated data from $this::profile and adds it to $this::data.
@@ -229,7 +241,8 @@ class UserInfoPlus {
 		}
 		$profile_array = $profile->toArray();
 		unset($profile_array['extended']);
-		return $this->_mergeWithData($profile_array);
+		$this->_mergeWithData($profile_array);
+        return $profile_array;
 	}
 
     /**
@@ -241,7 +254,8 @@ class UserInfoPlus {
 		if (!$prefix) $prefix = $this->config['prefixes']['extended'];
 		$data = $this->_profile->get('extended');
 		$data = $this->_processDataArray($data,$prefix);
-        return $this->_mergeWithData($data);
+        $this->_mergeWithData($data);
+        return $data;
 	}
 
     /**
@@ -253,7 +267,8 @@ class UserInfoPlus {
 		if (!$prefix) $prefix = $this->config['prefixes']['remote'];
 		$data = $this->user->get('remote_data');
         $data = $this->_processDataArray($data,$prefix);
-        return $this->_mergeWithData($data);
+        $this->_mergeWithData($data);
+        return $data;
 	}
     
    
@@ -281,14 +296,15 @@ class UserInfoPlus {
      * @param $fields array An optional array of field names to unset
      * @return bool Always true
      */
-	protected function _protectData(array $fields = array()) {
+	protected function _protectData($data, array $fields = array()) {
+        $output = $data;
         $fields = $fields ? $fields : $this->config['protected_fields_array'];
 		foreach ($fields as $field) {
-			if (isset($this->_data[$field])) {
-				unset($this->_data[$field]);
+			if (isset($output[$field])) {
+				unset($output[$field]);
 			}
 		}
-		return true;
+		return $output;
 	}
 
     /**
@@ -329,7 +345,7 @@ class UserInfoPlus {
                         }   
                         $data_array[$key.'.'.$key2] = $new_value2;
                     }
-                } elseif (strval($value)) {
+                } elseif (is_string($value) || is_int($value)) {
                     $data_array[$key] = $value;
                 } else {
                     $this->modx->log(modX::LOG_LEVEL_INFO,"UserInfoPlus: Skipping {$key} for user {$this->user->get('username')} because it is not an array or string.");
@@ -395,17 +411,16 @@ class UserInfoPlus {
      * @return string The value. Null if value not found.
      */
     protected function _findFieldValue($fieldname, $methods_to_try= null) {
-        $output = null;
         foreach(array_unique($methods_to_try) as $methodname) {
             $returned_value = $this->_callMethodOnce($methodname);
-            if (is_string($returned_value) && !isset($this->_data[$fieldname])) {
-                $this->set($fieldname, $returned_value);
+            if (!is_null($returned_value) && !is_array($returned_value)) {
+                $this->set($fieldname,$returned_value);
             }
-            if (isset($this->_data[$fieldname])) {
-                $output = $this->_data[$fieldname];
-                break;
+            $value = isset($this->_data[$fieldname]) ? $this->_data[$fieldname] : null;
+            if (!is_null($value)) {
+                return $value;
             }
         }
-        return $output;
+        return null;
     }
 }
