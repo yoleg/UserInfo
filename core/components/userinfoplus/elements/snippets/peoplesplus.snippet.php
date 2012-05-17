@@ -26,22 +26,23 @@
  *
  * @package userinfoplus
  */
- 
+/**
+ * @var MODx $modx
+ * @var array $scriptProperties
+ */
 /*
  * UserInfoPlus: Allows you to load a custom class that overrides userinfoplus to add calculations or control order of processing
  */
-$classname_custom = $modx->getOption('class',$scriptProperties,$modx->getOption('userinfoplus.class',null,''));
-$classname_upper = $classname_custom ? $classname_custom : 'UserInfoPlus';
-$classname_lower = $modx->getOption('class_lower',$scriptProperties,$modx->getOption('userinfoplus.class_lower',null,strtolower($classname_upper)));
-$classname_subfolder = $classname_custom ? str_replace('userinfoplus','',$classname_lower).'/' : '';
-$classname_path = $modx->getOption('class_path',$scriptProperties,$modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/'.$classname_subfolder);
-if ($classname_custom) {
-    require_once($modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/userinfoplus.class.php');
-}
-$userinfoplus = $modx->getService('userinfoplus',$classname_upper,$classname_path,$scriptProperties);
-if (!($userinfoplus instanceof UserInfoPlus)) {
-    $modx->log(modX::LOG_LEVEL_ERROR,'Could not find class at: '.$classname_path);
-    return 'Could not find class at: '.$classname_path;
+$classname_custom = $modx->getOption('class_name',$scriptProperties,$modx->getOption('userinfoplus.class_name',null,''));
+$class_subfolder = $modx->getOption('class_subfolder',$scriptProperties,$modx->getOption('userinfoplus.class_subfolder',null,''));
+$class_path = $modx->getOption('class_path',$scriptProperties,$modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/');
+$userinfoplus_config = $classname_custom ? array('class_name'=>$classname_custom, 'class_subfolder'=>$class_subfolder, 'class_path'=>$class_path): array();
+
+/** @var $userinfoplusservice UserInfoPlusService */
+$userinfoplusservice = $modx->getService('userinfoplusservice','UserInfoPlusService',$modx->getOption('userinfoplus.core_path',null,$modx->getOption('core_path').'components/userinfoplus/').'model/userinfoplus/',$userinfoplus_config);
+if (!($userinfoplusservice instanceof UserInfoPlusService)) {
+    $modx->log(modX::LOG_LEVEL_ERROR,'Could not find userinfoplus class');
+    return 'Could not find userinfoplus class';
 }
 
 $output = '';
@@ -104,7 +105,7 @@ foreach ($users as $user) {
     
     /* PeoplesPlus: process data */
     /** @var $userinfoplus UserInfoPlus */
-    $userinfoplus->setUser($user);
+    $userinfoplus = $userinfoplusservice->getUserInfo($user);
     $userArray = $userinfoplus->toArray();
     if ($debug) {
         $userArray['debug'] = '<pre>'.print_r($userArray,1).'</pre>';
