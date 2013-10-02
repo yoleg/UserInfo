@@ -101,8 +101,6 @@ $alt = false;
 $iterativeCount = count($users);
 $idx = 0;
 foreach ($users as $user) {
-    if (empty($user->$profileAlias)) continue;
-    
     /* PeoplesPlus: process data */
     /** @var $userinfoplus UserInfoPlus */
     $userinfoplus = $userinfoplusservice->getUserInfo($user);

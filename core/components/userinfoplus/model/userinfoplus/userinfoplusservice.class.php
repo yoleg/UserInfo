@@ -34,7 +34,8 @@ class UserInfoPlusService
 		$this->config['prefixes']['calculated'] = $this->modx->getOption('userinfo_calculated_prefix',$this->config,'');
 
 		/* generate the default protected fields array - sets defaults as a security fallback */
-        $this->config['protected_fields_array'] = isset($this->config['protected_fields']) ? explode(',',$this->config['protected_fields']) : array('sessionid','password','cachepwd');
+        $this->config['protected_fields_array'] = isset($this->config['protected_fields']) ?
+                explode(',',$this->config['protected_fields']) : array('sessionid','password','cachepwd');
         $this->config['calculated_fields'] = array('self');
 
         $this->config['field_types'] = array(

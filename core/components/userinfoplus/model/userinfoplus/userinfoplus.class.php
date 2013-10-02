@@ -87,7 +87,11 @@ class UserInfoPlus {
         foreach ($output as $k => $v) {
             if (is_numeric($v)) {
                 $v = (float) $v;
-                $output[$k] = (string) round($v,$round_precision);
+                $rp = (int) $round_precision;
+                while($v && ($v < pow(10,-$rp))) {
+                    $rp++;
+                }
+                $output[$k] = (string) round($v,$rp);
             }
         }
         return $output;
@@ -107,7 +111,7 @@ class UserInfoPlus {
             $this->_callMethodOnce($method);
         }
 		// Unsets some protected fields - by default removes fields in $this->config['protected_fields']
-		$this->_protectData($this->_data);
+        $this->_data = $this->_protectData($this->_data);
 		return true;
 	}
 
@@ -184,10 +188,10 @@ class UserInfoPlus {
 /*   Meant for extension       */
 /* *************************** */
     /** Calculates custom data
-     * @internal param null $prefix
+     * @param array $fields
      * @return bool success
      */
-	public function calculateData($fields = null) {
+	public function calculateData(array $fields = null) {
         $fields = $fields ? $fields : $this->config['calculated_fields'];
         foreach($fields as $field) {
             $this->get($field,'calculated');
@@ -273,10 +277,10 @@ class UserInfoPlus {
     /**
      * Adds an array to $this::data
      * Also returns the same array
-     * @param $data array An associative array of fields with values to merge into $this::data
+     * @param array $data An associative array of fields with values to merge into $this::data
      * @return array The resulting array
      */
-	protected function _mergeWithData($data) {
+	protected function _mergeWithData(array $data) {
 		if (is_array($data) && (!empty($data))) {
 			$this->_data = array_merge($this->_data,$data);
 		}
@@ -288,11 +292,11 @@ class UserInfoPlus {
      * If no parameter is passed, uses $this->config['protected_fields']
      * You HAVE to have protected_fields either in config or as a method parameter. To disable, just list a field that doesn't exist.
      * This is a security fall-back.
-     * @param $data
-     * @param $fields array An optional array of field names to unset
+     * @param array $data
+     * @param array $fields An optional array of field names to unset
      * @return bool Always true
      */
-	protected function _protectData($data, array $fields = array()) {
+	protected function _protectData(array $data, array $fields = array()) {
         $output = $data;
         $fields = $fields ? $fields : $this->config['protected_fields_array'];
 		foreach ($fields as $field) {
@@ -352,6 +356,11 @@ class UserInfoPlus {
 		}
 		return $data_array;
 	}
+    /** Gets a request-level cached method with a cached key.
+     * @param string $method
+     * @param string $key
+     * @return mixed
+     */
     protected function _getCache($method,$key) {
         if (isset($this->_cache[$method]) && isset($this->_cache[$method][$key])) {
             return $this->_cache[$method][$key];
